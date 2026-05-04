@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+
+# Env files
+.env
+.env.*
+
+# Virtual env
+venv/
+
+# Alembic (ONLY ignore versions if needed? usually NO)
+# alembic/versions/*.py  ← usually you DO commit these
+
+# OS stuff
+.DS_Store
+Thumbs.db
