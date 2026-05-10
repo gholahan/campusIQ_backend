@@ -2,7 +2,7 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
-from core.config import DATABASE_URL
+from app.core.config import DATABASE_URL
 
 
 if not DATABASE_URL:
@@ -15,6 +15,9 @@ engine = create_async_engine(
     pool_pre_ping=True,
     connect_args={
         "statement_cache_size": 0
+    },
+    execution_options={
+        "compiled_cache": None
     }
 )
 
