@@ -23,13 +23,23 @@ class TutorProfile(SQLModel, table=True):
     bio: Optional[str] = Field(
         sa_column=Column(Text, nullable=True)
     )
-    hourly_rate: Decimal = Field(
+    hourly_rate: Decimal | None = Field(
         sa_column=Column(Numeric(10, 2), nullable=True)
     )
     availability: Optional[Dict[str, Any]] = Field(default=None,sa_column=Column(JSONB))
     is_online: bool = False
     average_rating: Decimal = Field(
-        sa_column=Column(Numeric(3, 2), nullable=False)
+    default=Decimal("0.00"),
+    sa_column=Column(
+        Numeric(3, 2),
+        nullable=False,
+        ),
+    )
+    
+
+    courses: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False),
     )
 
     review_count: int = 0
