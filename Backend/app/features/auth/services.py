@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi import HTTPException
 from sqlmodel import select
 
 from app.db.session import SessionDep
@@ -23,6 +24,7 @@ def parse_supabase_time(value: Any) -> datetime:
     raise TypeError(
         f"Invalid datetime value: {type(value)}"
     )
+
 
 
 async def sync_user_service(
@@ -72,8 +74,8 @@ async def sync_user_service(
     # Names
     # ---------------------------------
 
-    first_name = payload.first_name
-    last_name = payload.last_name
+    first_name: str = payload.first_name or ""
+    last_name: str = payload.last_name or ""
 
     if provider == "google":
         full_name_raw = (
@@ -122,21 +124,12 @@ async def sync_user_service(
 
     user = User(
         id=user_id,
-
         role=payload.role,
-
         first_name=first_name,
         last_name=last_name,
-
         email=str(auth_user.email),
-
         avatar_url=avatar_url,
-
-        email_verified=(
-            auth_user.email_confirmed_at
-            is not None
-        ),
-
+        email_verified=( auth_user.email_confirmed_at is not None),
         created_at=created_at,
         updated_at=updated_at,
         last_seen_at=last_seen_at,

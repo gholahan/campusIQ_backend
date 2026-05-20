@@ -1,34 +1,32 @@
-import uuid
-from datetime import datetime
-from sqlmodel import SQLModel, Field, Index
-from sqlalchemy import Column, DateTime, ForeignKey, Text
-from sqlalchemy.sql import func
+# from datetime import datetime, timezone
+# from typing import List, Optional
+# import uuid
+
+# from sqlalchemy import Column, DateTime, Text, func
+# from sqlmodel import Field, Relationship, SQLModel
+
+# from app.features.tutors.models import TutorCourse
 
 
-class Course(SQLModel, table=True):
-    __tablename__ = "courses" #type: ignore
+# class Course(SQLModel, table=True):
+#     __tablename__ = "courses"  # type: ignore
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    name: str = Field(sa_column=Column(Text, nullable=False, unique=True))
-    created_at: datetime = Field(
-        sa_column=Column(
-            DateTime(timezone=True),
-            server_default=func.now(),
-            nullable=False,
-        )
-    )
+#     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
 
+#     name: str = Field(
+#         sa_column=Column(Text, nullable=False, unique=True)
+#     )
 
-class TutorCourse(SQLModel, table=True):
-    __tablename__ = "tutor_courses" #type: ignore
+#     created_at: datetime = Field(
+#         default_factory=lambda: datetime.now(timezone.utc),
+#         sa_column=Column(
+#             DateTime(timezone=True),
+#             nullable=False,
+#             server_default=func.now(),
+#         ),
+#     )
 
-    tutor_id: uuid.UUID =  Field(
-        sa_column=Column(ForeignKey("users.id", ondelete="CASCADE"),primary_key=True, nullable=False)
-    )
-    course_id: uuid.UUID =  Field(
-        sa_column=Column(ForeignKey("courses.id", ondelete="CASCADE"),primary_key=True, nullable=False)
-    )
-
-    __table_args__ = (
-        Index("idx_tutor_courses_course", "course_id"),
-    )
+#     tutors: list["TutorProfile"] = Relationship(
+#         back_populates="courses",
+#         link_model=TutorCourse,
+#     )

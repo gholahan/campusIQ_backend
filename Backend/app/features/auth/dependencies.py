@@ -14,7 +14,6 @@ from fastapi.security import (
 )
 from supabase import create_client
 from sqlmodel import select
-
 from app.common.enums import UserRole
 from app.core.config import (
     SUPABASE_KEY,
