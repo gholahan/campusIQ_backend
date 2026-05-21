@@ -40,6 +40,8 @@ class TutorProfile(SQLModel, table=True):
             nullable=False,
         )
     )
+    full_name: str = Field(sa_column=Column(Text, nullable=False))
+    title: str| None = Field(sa_column=Column(Text, nullable=True))
     bio: str = Field(sa_column=Column(Text, nullable=False))
     hourly_rate: Optional[Decimal] = Field(
         sa_column=Column(Numeric(10, 2), nullable=True)
