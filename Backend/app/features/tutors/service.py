@@ -1,77 +1,202 @@
-# app/features/tutors/service.py
-
 from decimal import Decimal
-from typing import Any
+from datetime import time
+from uuid import UUID
 
+from fastapi import HTTPException
 from sqlmodel import select
 
 from app.db.session import SessionDep
+from app.features.courses.schema import CourseRead
+from app.features.courses.services import get_or_create_course
+from app.features.tutors.models import Course, TutorCourse, TutorProfile
+from app.features.tutors.schema import (
+    TutorProfileCreate,
+    TutorProfileRead,
+    TutorProfileUpdate,
+)
 from app.features.users.models import User
-from app.features.tutors.models import TutorProfile
 
 
-async def sync_tutor_profile_service(
+# ----------------------------
+# Availability Serializer
+# ----------------------------
+def serialize_availability(availability: dict | None):
+    if not availability:
+        return None
+
+    serialized = {}
+
+    for day, slot in availability.items():
+        day_key = str(getattr(day, "value", day))
+
+        start = slot.get("start")
+        end = slot.get("end")
+
+        serialized[day_key] = {
+            "start": (
+                start.strftime("%H:%M")
+                if isinstance(start, time)
+                else str(start)
+            ),
+            "end": (
+                end.strftime("%H:%M")
+                if isinstance(end, time)
+                else str(end)
+            ),
+        }
+
+    return serialized
+
+
+# ----------------------------
+# CREATE
+# ----------------------------
+async def create_tutor_profile_service(
     session: SessionDep,
-    auth_user: Any,
-    payload: dict[str, Any],
-) -> TutorProfile:
+    auth_user: User,
+    payload: TutorProfileCreate,
+):
+    existing = await session.get(TutorProfile, auth_user.id)
 
-    user_id = auth_user.id
+    if existing:
+        raise HTTPException(status_code=409, detail="Profile already exists")
 
-    # --------------------------
-    # ensure user exists
-    # --------------------------
-    user = await session.get(User, user_id)
-
-    if not user:
-        raise ValueError("User does not exist")
-
-    # --------------------------
-    # check existing tutor profile
-    # --------------------------
-    statement = select(TutorProfile).where(
-        TutorProfile.user_id == user_id
+    availability = serialize_availability(
+        {k.value: v.model_dump() for k, v in payload.availability.items()}
     )
 
-    result = await session.exec(statement)
-
-    existing = result.first()
-
-    # --------------------------
-    # normalize payload
-    # --------------------------
-    courses: list[str] = payload.get("courses") or []
-
-    if isinstance(courses, str):
-        courses = [c.strip() for c in courses.split(",")]
-
-    hourly_rate = payload.get("hourlyRate")
-
-    if hourly_rate is not None:
-        hourly_rate = Decimal(str(hourly_rate))
-
-    # --------------------------
-    # update or create
-    # --------------------------
-    if existing:
-        existing.bio = payload.get("bio", existing.bio)
-        existing.courses = courses or existing.courses
-        existing.hourly_rate = hourly_rate or existing.hourly_rate
-
-        session.add(existing)
-        await session.commit()
-        await session.refresh(existing)
-        return existing
-
     tutor = TutorProfile(
-        user_id=user_id,
-        bio=payload.get("bio"),
-        courses=courses,
-        hourly_rate=hourly_rate,
+        user_id=auth_user.id,
+        full_name=payload.name,
+        title=payload.title,
+        bio=payload.bio,
+        hourly_rate=Decimal(str(payload.hourly_rate)),
+        availability=availability,
+        is_online=True,
     )
 
     session.add(tutor)
-    await session.commit()
-    await session.refresh(tutor)
+    await session.flush()
 
-    return tutor
+    await _merge_tutor_courses(session, auth_user.id, payload.courses)
+
+    await session.commit()
+
+    return await get_tutor_profile_response(session, auth_user.id)
+
+
+# ----------------------------
+# RESPONSE
+# ----------------------------
+async def get_tutor_profile_response(
+    session: SessionDep,
+    user_id: UUID,
+) -> TutorProfileRead:
+    tutor = await session.get(TutorProfile, user_id)
+
+    if not tutor:
+        raise HTTPException(status_code=404, detail="Tutor profile not found")
+
+    statement = (
+        select(Course)
+        .join(TutorCourse, TutorCourse.course_id == Course.id)
+        .where(TutorCourse.tutor_id == user_id)
+    )
+
+    result = await session.exec(statement)
+    courses = result.all()
+
+    return TutorProfileRead(
+        user_id=tutor.user_id,
+        full_name=tutor.full_name,
+        title=tutor.title,
+        bio=tutor.bio,
+        hourly_rate=tutor.hourly_rate,
+        availability=tutor.availability,
+        is_online=tutor.is_online,
+        average_rating=tutor.average_rating,
+        review_count=tutor.review_count,
+        total_sessions=tutor.total_sessions,
+        courses=[CourseRead(id=c.id, name=c.name) for c in courses],
+    )
+
+
+# ----------------------------
+# COURSES MERGE
+# ----------------------------
+async def _merge_tutor_courses(
+    session: SessionDep,
+    tutor_id: UUID,
+    new_courses: list[str] | None,
+):
+    if not new_courses:
+        return
+
+    existing = await session.exec(
+        select(Course)
+        .join(TutorCourse, TutorCourse.course_id == Course.id) #type: ignore
+        .where(TutorCourse.tutor_id == tutor_id)
+    )
+
+    existing_names = {c.name.lower() for c in existing.all()}
+
+    for name in new_courses:
+        if name.lower() in existing_names:
+            continue
+
+        course = await get_or_create_course(session, name)
+
+        session.add(
+            TutorCourse(
+                tutor_id=tutor_id,
+                course_id=course.id
+            )
+        )
+
+
+# ----------------------------
+# UPDATE (TRUE MERGE PATCH)
+# ----------------------------
+async def update_tutor_profile_service(
+    session: SessionDep,
+    auth_user: User,
+    payload: TutorProfileUpdate,
+):
+    tutor = await session.get(TutorProfile, auth_user.id)
+
+    if not tutor:
+        raise HTTPException(status_code=404, detail="Tutor profile not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+
+    # name mapping
+    if "name" in update_data:
+        tutor.full_name = update_data.pop("name")
+
+    new_courses = update_data.pop("courses", None)
+
+    # availability merge (true patch)
+    if "availability" in update_data:
+        incoming = update_data.pop("availability") or {}
+
+        incoming_serialized = serialize_availability(incoming)
+        current = tutor.availability or {}
+
+        merged = dict(current)
+
+        for day, slot in incoming_serialized.items():
+            merged[day] = slot   # ONLY override specific day
+
+        update_data["availability"] = merged
+
+    # scalar updates
+    for key, value in update_data.items():
+        setattr(tutor, key, value)
+
+    # merge courses (no replace)
+    await _merge_tutor_courses(session, auth_user.id, new_courses)
+
+    session.add(tutor)
+    await session.commit()
+
+    return await get_tutor_profile_response(session, auth_user.id)

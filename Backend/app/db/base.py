@@ -24,10 +24,7 @@ from app.features.moderation.models import ModerationReport
 from app.features.reviews.models import Review
 
 # TUTORS
-from app.features.tutors.models import TutorProfile
-
-# COURSES
-from app.features.courses.models import Course, TutorCourse
+from app.features.tutors.models import TutorProfile, Course, TutorCourse
 
 # AI
 from app.features.ai.models import AIConversation, AIMessage, AICredit
