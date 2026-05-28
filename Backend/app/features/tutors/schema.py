@@ -60,6 +60,29 @@ class TutorProfileUpdate(BaseModel):
     is_online: bool | None = None
 
 
+class TutorSearchParams(BaseModel):
+    q: str | None = None  # 👈 NEW GLOBAL SEARCH
+
+    name: str | None = None
+    course: str | None = None
+
+    is_online: bool | None = None
+    min_rate: float | None = Field(default=None, gt=0)
+    max_rate: float | None = Field(default=None, gt=0)
+    min_rating: float | None = Field(default=None, ge=0, le=5)
+
+    order_by: str | None = Field(default=None, pattern="^(average_rating|hourly_rate)$")
+    order_dir: str = Field(default="desc", pattern="^(asc|desc)$")
+
+    offset: int = Field(default=0, ge=0)
+    limit: int = Field(default=20, ge=1, le=100)
+
+
+class TutorSearchResult(BaseModel):
+    total: int
+    tutors: list["TutorProfileRead"]
+
+
 class TutorProfileRead(BaseModel):
     user_id: uuid.UUID
     full_name: str              # from User.first_name + last_name

@@ -103,7 +103,7 @@ async def get_current_user(
 
 
 # ---------------------------------------------------
-# Role Guards : depend on get_current_user that in return deends on get_current_auth_use
+# Role Guards : depend on get_current_user that in return depends on get_current_auth_user
 # ---------------------------------------------------
 
 async def require_admin(
