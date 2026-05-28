@@ -13,6 +13,8 @@ from app.features.tutors.schema import (
     TutorProfileCreate,
     TutorProfileRead,
     TutorProfileUpdate,
+    TutorSearchParams,
+    TutorSearchResult,
 )
 from app.features.users.models import User
 
