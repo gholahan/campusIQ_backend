@@ -199,4 +199,218 @@ async def update_tutor_profile_service(
     session.add(tutor)
     await session.commit()
 
-    return await get_tutor_profile_response(session, auth_user.id)
+    return await get_tutor_profile_response(
+        session,
+        auth_user.id,
+    )
+
+
+# ----------------------------
+# SEARCH(Tutor)
+# ----------------------------
+async def search_tutors_service(
+    session: SessionDep,
+    params: TutorSearchParams
+) -> TutorSearchResult:
+
+    from sqlalchemy import (
+        func as sa_func,
+        asc,
+        desc,
+        or_,
+        and_,
+    )
+    from sqlalchemy.orm import selectinload
+
+    stmt = (
+        select(TutorProfile)
+        .options(selectinload(TutorProfile.courses))
+    )
+
+    joined_course = False
+
+    # -------------------------
+    # BASIC FILTERS
+    # -------------------------
+
+    if params.is_online is not None:
+        stmt = stmt.where(
+            TutorProfile.is_online == params.is_online
+        )
+
+    if params.min_rate is not None:
+        stmt = stmt.where(
+            TutorProfile.hourly_rate >= params.min_rate
+        )
+
+    if params.max_rate is not None:
+        stmt = stmt.where(
+            TutorProfile.hourly_rate <= params.max_rate
+        )
+
+    if params.min_rating is not None:
+        stmt = stmt.where(
+            TutorProfile.average_rating >= params.min_rating
+        )
+
+    # -------------------------
+    # NAME FILTER
+    # -------------------------
+
+    if params.name:
+        stmt = stmt.where(
+            TutorProfile.full_name.ilike(f"%{params.name}%")
+        )
+
+    # -------------------------
+    # COURSE FILTER
+    # -------------------------
+
+    if params.course:
+        term = params.course.strip()
+        similarity_col = sa_func.max(sa_func.similarity(Course.name, term)).label("course_sim")
+        stmt = (
+            stmt
+            .join(
+                TutorCourse,
+                TutorCourse.tutor_id == TutorProfile.user_id
+            )
+            .join(
+                Course,
+                Course.id == TutorCourse.course_id
+            )
+            .where(
+                Course.name.ilike(f"%{params.course}%")
+            )
+        )
+
+        joined_course = True
+
+    # -------------------------
+    # GLOBAL SEARCH
+    # -------------------------
+
+    if params.q:
+
+        if not joined_course:
+            stmt = (
+                stmt
+                .join(
+                    TutorCourse,
+                    TutorCourse.tutor_id == TutorProfile.user_id
+                )
+                .join(
+                    Course,
+                    Course.id == TutorCourse.course_id
+                )
+            )
+
+        terms = params.q.lower().split()
+
+        conditions = []
+
+        for term in terms:
+            conditions.append(
+                or_(
+                    TutorProfile.full_name.ilike(f"%{term}%"),
+                    TutorProfile.title.ilike(f"%{term}%"),
+                    Course.name.ilike(f"%{term}%"),
+
+                    sa_func.similarity(
+                        TutorProfile.full_name,
+                        term
+                    ) > 0.3,
+
+                    sa_func.similarity(
+                        Course.name,
+                        term
+                    ) > 0.3,
+                )
+            )
+
+        stmt = stmt.where(and_(*conditions))
+
+    # -------------------------
+    # REMOVE DUPLICATES
+    # -------------------------
+
+    stmt = stmt.group_by(TutorProfile.user_id)
+
+    # -------------------------
+    # COUNT
+    # -------------------------
+
+    count_stmt = select(
+        sa_func.count()
+    ).select_from(
+        stmt.with_only_columns(
+            TutorProfile.user_id
+        ).subquery()
+    )
+
+    total = (await session.exec(count_stmt)).one()
+
+    # -------------------------
+    # ORDERING
+    # -------------------------
+
+    if params.q:
+        stmt = stmt.order_by(
+            desc(TutorProfile.average_rating)
+        )
+
+    else:
+        order_col = (
+            TutorProfile.hourly_rate
+            if params.order_by == "hourly_rate"
+            else TutorProfile.average_rating
+        )
+
+        stmt = stmt.order_by(
+            asc(order_col)
+            if params.order_dir == "asc"
+            else desc(order_col)
+        )
+
+    # -------------------------
+    # PAGINATION
+    # -------------------------
+
+    stmt = (
+        stmt
+        .offset(params.offset)
+        .limit(params.limit)
+    )
+
+    result = await session.exec(stmt)
+    tutors = result.unique().all()
+
+    # -------------------------
+    # RESPONSE
+    # -------------------------
+
+    return TutorSearchResult(
+        total=total,
+        tutors=[
+            TutorProfileRead(
+                user_id=t.user_id,
+                full_name=t.full_name,
+                title=t.title,
+                bio=t.bio,
+                hourly_rate=t.hourly_rate,
+                availability=t.availability,
+                is_online=t.is_online,
+                average_rating=t.average_rating,
+                review_count=t.review_count,
+                total_sessions=t.total_sessions,
+                courses=[
+                    CourseRead(
+                        id=c.id,
+                        name=c.name
+                    )
+                    for c in t.courses
+                ],
+            )
+            for t in tutors
+        ],
+    )

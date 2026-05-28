@@ -1,16 +1,19 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.features.users.models import User
 from app.db.session import SessionDep
-from app.features.auth.dependencies import require_tutor
+from app.features.auth.dependencies import get_current_user, require_tutor
 from app.features.tutors.schema import (
     TutorProfileCreate,
     TutorProfileRead,
     TutorProfileUpdate,
+    TutorSearchParams,
+    TutorSearchResult,
 )
 from app.features.tutors.service import (
     create_tutor_profile_service,
     get_tutor_profile_response,
+    search_tutors_service,
     update_tutor_profile_service,
 )
 
@@ -52,3 +55,35 @@ async def update_tutor_profile(
         auth_user=auth_user,
         payload=payload,
     )
+
+
+@router.get("/search", response_model=TutorSearchResult)
+async def search_tutors(
+    session: SessionDep,
+    q: str | None = Query(default=None),
+    name: str | None = Query(default=None),
+    course: str | None = Query(default=None),
+    is_online: bool | None = Query(default=None),
+    min_rate: float | None = Query(default=None, gt=0),
+    max_rate: float | None = Query(default=None, gt=0),
+    min_rating: float | None = Query(default=None, ge=0, le=5),
+    order_by: str | None = Query(default=None, pattern="^(average_rating|hourly_rate)$"),
+    order_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+    auth_user: User = Depends(get_current_user), # auth gate only  
+):
+    params = TutorSearchParams(
+        q=q,
+        name= name,
+        course=course,
+        is_online=is_online,
+        min_rate=min_rate,
+        max_rate=max_rate,
+        min_rating=min_rating,
+        order_by=order_by,
+        order_dir=order_dir,
+        offset=offset,
+        limit=limit,
+    )
+    return await search_tutors_service(session=session, params=params)
