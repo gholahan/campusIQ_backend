@@ -1,3 +1,4 @@
+import uuid
 from fastapi import APIRouter, Depends, Query
 
 from app.features.users.models import User
@@ -87,3 +88,11 @@ async def search_tutors(
         limit=limit,
     )
     return await search_tutors_service(session=session, params=params)
+
+@router.get("/{tutor_id}", response_model=TutorProfileRead)
+async def get_tutor_by_id(
+    tutor_id: uuid.UUID,
+    session: SessionDep,
+    auth_user: User = Depends(get_current_user),
+):
+    return await get_tutor_profile_response(session, tutor_id)
