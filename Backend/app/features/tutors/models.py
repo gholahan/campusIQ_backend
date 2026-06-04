@@ -49,6 +49,10 @@ class TutorProfile(SQLModel, table=True):
     availability: Optional[Dict[str, Any]] = Field(
         default=None, sa_column=Column(JSONB)
     )
+    profile_picture_url: Optional[str] = Field(
+    default=None,
+    sa_column=Column(Text, nullable=True)
+    )
     is_online: bool = False
     average_rating: Decimal = Field(
         default=Decimal("0.00"),
