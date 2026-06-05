@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.features.auth.routes import router as auth_router
 from app.features.admin.routes import router as admin_router
 from app.features.tutors.routes import router as tutors_router
+from app.features.sessions.routes import router as session_router
 
 app = FastAPI(title="CampusIQ API")
 
@@ -20,6 +21,8 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(tutors_router)
+app.include_router(session_router)
+
 
 
 # app.include_router(api_router)
