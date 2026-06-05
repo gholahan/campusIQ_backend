@@ -20,6 +20,7 @@ class SessionCreate(BaseModel):
     notes: Optional[str] = None
 
 
+
 class SessionResponse(BaseModel):
     id: uuid.UUID
     student_id: uuid.UUID
