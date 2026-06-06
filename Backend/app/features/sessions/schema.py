@@ -19,9 +19,24 @@ class SessionCreate(BaseModel):
     scheduled_at: ScheduledAt
     notes: Optional[str] = None
 
+class SessionTutorRead(BaseModel):
+    id: uuid.UUID
+    full_name: str
+    profile_picture_url: str | None
 
 
-class SessionResponse(BaseModel):
+class SessionRead(BaseModel):
+    id: uuid.UUID
+    subject: str
+    duration: float
+    notes: str | None
+    status: SessionStatus
+    cost: float
+    tutor: SessionTutorRead
+    scheduled_at: ScheduledAt
+    created_at: datetime
+
+class PostSessionResponse(BaseModel):
     id: uuid.UUID
     student_id: uuid.UUID
     tutor_id: uuid.UUID

@@ -6,7 +6,7 @@ from sqlalchemy import func
 from app.db.session import SessionDep
 from app.features.tutors.models import Course, TutorCourse, TutorProfile
 from app.features.sessions.models import Session
-from app.features.sessions.schema import SessionCreate
+from app.features.sessions.schema import ScheduledAt, SessionCreate, SessionRead, SessionTutorRead
 
 async def create_session(
     student_id: uuid.UUID,
@@ -65,11 +65,45 @@ async def create_session(
 async def get_student_sessions(
     db: SessionDep,
     student_id: uuid.UUID
-) -> list[Session]:
+) -> list[SessionRead]:
     result = await db.exec(
-        select(Session).where(Session.student_id == student_id)
+        select(Session, TutorProfile)
+        .join(TutorProfile, TutorProfile.user_id == Session.tutor_id)
+        .where(Session.student_id == student_id)
     )
-    return result.all()
+    sessions = result.all()
+
+    return [
+        SessionRead(
+            id=session.id,
+            subject=session.subject,
+            duration=session.duration,
+            notes=session.notes,
+            status=session.status,
+            cost=session.cost,
+            tutor=SessionTutorRead(
+                id=tutor.user_id,
+                full_name=tutor.full_name,
+                profile_picture_url=tutor.profile_picture_url,
+            ),
+            scheduled_at=ScheduledAt(**session.scheduled_at),
+            created_at=session.created_at,
+        )
+        for session, tutor in sessions
+    ]
+
+
+async def get_student_session_count(
+    db: SessionDep,
+    student_id: uuid.UUID,
+) -> int:
+    result = await db.exec(
+        select(func.count(Session.id)).where(
+            Session.student_id == student_id
+        )
+    )
+
+    return result.one()
 
 async def get_student_weekly_session_count(
     db: SessionDep,
