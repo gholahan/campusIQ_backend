@@ -1,6 +1,6 @@
 import uuid
 from fastapi import HTTPException
-from sqlmodel import select
+from sqlmodel import desc, select
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from app.db.session import SessionDep
@@ -70,6 +70,7 @@ async def get_student_sessions(
         select(Session, TutorProfile)
         .join(TutorProfile, TutorProfile.user_id == Session.tutor_id)
         .where(Session.student_id == student_id)
+        .order_by(desc(Session.created_at))
     )
     sessions = result.all()
 
