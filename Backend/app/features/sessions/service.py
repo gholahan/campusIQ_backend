@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from sqlmodel import desc, select
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
+from app.common.enums import SessionStatus
 from app.db.session import SessionDep
 from app.features.tutors.models import Course, TutorCourse, TutorProfile
 from app.features.sessions.models import Session
@@ -93,20 +94,7 @@ async def get_student_sessions(
         for session, tutor in sessions
     ]
 
-
-async def get_student_session_count(
-    db: SessionDep,
-    student_id: uuid.UUID,
-) -> int:
-    result = await db.exec(
-        select(func.count(Session.id)).where(
-            Session.student_id == student_id
-        )
-    )
-
-    return result.one()
-
-async def get_student_weekly_session_count(
+async def get_student_this_week_session_count(
     db: SessionDep,
     student_id: uuid.UUID
 ) -> int:
@@ -122,6 +110,88 @@ async def get_student_weekly_session_count(
 
     result = await db.exec(
         select(func.count(Session.id)).where(
+            Session.student_id == student_id,
+            Session.created_at >= start_of_week,
+        )
+    )
+
+    return result.one()
+
+async def get_student_last_week_session_count(
+    db: SessionDep,
+    student_id: uuid.UUID
+) -> int:
+    now = datetime.now(timezone.utc)
+
+    # Start of this week (Monday 00:00 UTC)
+    start_of_this_week = (
+        now - timedelta(days=now.weekday())
+    ).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+    # Start and end of last week
+    start_of_last_week = start_of_this_week - timedelta(days=7)
+    end_of_last_week = start_of_this_week - timedelta(seconds=1)
+
+    result = await db.exec(
+        select(func.count(Session.id)).where(
+            Session.student_id == student_id,
+            Session.created_at >= start_of_last_week,
+            Session.created_at <= end_of_last_week,
+        )
+    )
+
+    return result.one()
+
+
+async def get_student_weekly_completed_hours(
+    db: SessionDep,
+    student_id: uuid.UUID,
+) -> float:
+    now = datetime.now(timezone.utc)
+
+    start_of_week = (
+        now - timedelta(days=now.weekday())
+    ).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+    result = await db.exec(
+        select(func.sum(Session.duration))
+        .where(
+            Session.student_id == student_id,
+            Session.status == SessionStatus.completed,
+            Session.created_at >= start_of_week,
+        )
+    )
+
+    return float(result.one() or 0)
+
+async def get_student_active_tutors_this_week(
+    db: SessionDep,
+    student_id: uuid.UUID,
+) -> int:
+    now = datetime.now(timezone.utc)
+
+    start_of_week = (
+        now - timedelta(days=now.weekday())
+    ).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+    result = await db.exec(
+        select(func.count(func.distinct(Session.tutor_id)))
+        .where(
             Session.student_id == student_id,
             Session.created_at >= start_of_week,
         )
