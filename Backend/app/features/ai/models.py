@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from sqlalchemy import Column, Enum, ForeignKey, Index, DateTime, Text
 from sqlalchemy.sql import func
@@ -14,14 +14,17 @@ class AIConversation(SQLModel, table=True):
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: uuid.UUID = Field(sa_column=Column(ForeignKey("users.id", ondelete="CASCADE"),nullable=False))
-    title: str = Field(sa_column=Column(Text, nullable=False))
+    user_id: uuid.UUID = Field(sa_column=Column(
+        ForeignKey("users.id", ondelete="CASCADE"),nullable=False,
+        unique=True
+        ))
     created_at: datetime = Field(
-    sa_column=Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-        )
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+        ),
     )
 
 
@@ -39,11 +42,12 @@ class AIMessage(SQLModel, table=True):
     )
     content:str = Field(sa_column=Column(Text, nullable=False))
     created_at: datetime = Field(
-    sa_column=Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-        )
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+        ),
     )
 
 
@@ -57,12 +61,13 @@ class AICredit(SQLModel, table=True):
 
     user_id: uuid.UUID = Field(sa_column=Column(ForeignKey("users.id", ondelete="CASCADE"),nullable=False, primary_key=True))
     used_today: int = 0
-    daily_limit: int = 20
+    daily_limit: int = 30
     last_reset: datetime = Field(
-    sa_column=Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
         )
     )
 
