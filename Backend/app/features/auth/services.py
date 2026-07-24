@@ -1,5 +1,3 @@
-# app/features/auth/services.py
-
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -7,6 +5,7 @@ from typing import Any
 from fastapi import HTTPException
 from sqlmodel import select
 
+from app.core.supabase import supabase_admin
 from app.db.session import SessionDep
 from app.features.auth.schema import SyncUserRequest
 from app.features.users.models import User
@@ -140,6 +139,17 @@ async def sync_user_service(
     await session.commit()
 
     await session.refresh(user)
+
+    #update supabase user metadata to include role and onboarding_complete
+    supabase_admin.auth.admin.update_user_by_id(
+    str(user.id),
+    {
+        "app_metadata": {
+            "role": user.role,
+            "onboarding_complete": False,
+        }
+    },
+)
 
     return user
 

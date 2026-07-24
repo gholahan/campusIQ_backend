@@ -27,7 +27,7 @@ async def create_tutor_profile(
     session: SessionDep,
     auth_user: User = Depends(require_tutor),
 ):
-    return await create_tutor_profile_service(   # ← was missing await
+    return await create_tutor_profile_service(
         session=session,
         auth_user=auth_user,
         payload=payload,

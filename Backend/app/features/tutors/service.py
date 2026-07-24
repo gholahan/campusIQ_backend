@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlmodel import select
 
+from app.core.supabase import supabase_admin
 from app.db.session import SessionDep
 from app.features.courses.schema import CourseRead
 from app.features.courses.services import get_or_create_course
@@ -83,6 +84,16 @@ async def create_tutor_profile_service(
     await _merge_tutor_courses(session, auth_user.id, payload.courses)
 
     await session.commit()
+    
+
+    supabase_admin.auth.admin.update_user_by_id(
+        str(auth_user.id),
+        {
+            "app_metadata": {
+                "onboarding_complete": True,
+            }
+        },
+    )
 
     return await get_tutor_profile_response(session, auth_user.id)
 
