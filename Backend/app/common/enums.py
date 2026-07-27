@@ -15,6 +15,7 @@ class SessionStatus(str, Enum):
     declined = "declined"
     completed = "completed"
     cancelled = "cancelled"
+    in_progress = "in_progress"
     no_show = "no_show"
 
 class ReportStatus(str, Enum):

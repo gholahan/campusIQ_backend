@@ -21,10 +21,11 @@ class Review(SQLModel, table=True):
     student_id: uuid.UUID = Field(sa_column=Column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False))
     session_id: Optional[uuid.UUID] =  Field(sa_column=Column(ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True, unique=True))
     created_at: datetime = Field(
+    default_factory=datetime.utcnow,
         sa_column=Column(
             DateTime(timezone=True),
             server_default=func.now(),
             nullable=False,
-        )
+        ),
     )
     is_verified: bool = False

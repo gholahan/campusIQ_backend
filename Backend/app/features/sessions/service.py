@@ -7,7 +7,12 @@ from app.common.enums import SessionStatus
 from app.db.session import SessionDep
 from app.features.tutors.models import Course, TutorCourse, TutorProfile
 from app.features.sessions.models import Session
-from app.features.sessions.schema import ScheduledAt, SessionCreate, SessionRead, SessionTutorRead
+from app.features.sessions.schema import (
+    ScheduledAt, SessionCreate, SessionRead, SessionTutorRead,
+    SessionParams, AcceptSession, ReviewCreate, ReviewRead
+)
+from app.features.reviews.models import Review
+
 
 async def create_session(
     student_id: uuid.UUID,
@@ -65,14 +70,21 @@ async def create_session(
 
 async def get_student_sessions(
     db: SessionDep,
-    student_id: uuid.UUID
+    student_id: uuid.UUID,
+    params: SessionParams,
 ) -> list[SessionRead]:
-    result = await db.exec(
+    query = (
         select(Session, TutorProfile)
         .join(TutorProfile, TutorProfile.user_id == Session.tutor_id)
         .where(Session.student_id == student_id)
-        .order_by(desc(Session.created_at))
     )
+
+    if params.status is not None:
+        query = query.where(Session.status == params.status)
+
+    query = query.order_by(desc(Session.created_at))
+
+    result = await db.exec(query)
     sessions = result.all()
 
     return [
@@ -83,6 +95,9 @@ async def get_student_sessions(
             notes=session.notes,
             status=session.status,
             cost=session.cost,
+            meet_link=session.meet_link,      
+            started_at=session.started_at,    
+            ended_at=session.ended_at,
             tutor=SessionTutorRead(
                 id=tutor.user_id,
                 full_name=tutor.full_name,
@@ -174,6 +189,7 @@ async def get_student_weekly_completed_hours(
 
     return float(result.one() or 0)
 
+
 async def get_student_active_tutors_this_week(
     db: SessionDep,
     student_id: uuid.UUID,
@@ -198,3 +214,249 @@ async def get_student_active_tutors_this_week(
     )
 
     return result.one()
+
+
+async def get_tutor_sessions(
+    db: SessionDep,
+    tutor_id: uuid.UUID,
+    params: SessionParams,
+):
+    query = (
+        select(Session, TutorProfile)
+        .join(TutorProfile, TutorProfile.user_id == Session.tutor_id)
+        .where(Session.tutor_id == tutor_id)
+    )
+
+    if params.status is not None:
+        query = query.where(Session.status == params.status)
+
+    query = query.order_by(desc(Session.created_at))
+
+    result = await db.exec(query)
+    sessions = result.all()
+
+    return [
+        SessionRead(
+            id=session.id,
+            subject=session.subject,
+            duration=session.duration,
+            notes=session.notes,
+            status=session.status,
+            cost=session.cost,
+            meet_link=session.meet_link,
+            started_at=session.started_at, 
+            ended_at=session.ended_at,        
+            tutor=SessionTutorRead(
+                id=tutor.user_id,
+                full_name=tutor.full_name,
+                profile_picture_url=tutor.profile_picture_url,
+            ),
+            scheduled_at=ScheduledAt(**session.scheduled_at),
+            created_at=session.created_at,
+        )
+        for session, tutor in sessions
+    ]
+
+async def get_session(
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: SessionDep,
+) -> SessionRead:
+    result = await db.exec(
+        select(Session, TutorProfile)
+        .join(TutorProfile, TutorProfile.user_id == Session.tutor_id)
+        .where(Session.id == session_id)
+    )
+    row = result.first()
+
+    if not row:
+        raise HTTPException(404, "Session not found")
+
+    session, tutor = row
+
+    if user_id not in (session.student_id, session.tutor_id):
+        raise HTTPException(403, "Not part of this session")
+
+    return SessionRead(
+        id=session.id,
+        subject=session.subject,
+        duration=session.duration,
+        notes=session.notes,
+        status=session.status,
+        cost=session.cost,
+        meet_link=session.meet_link,
+        started_at=session.started_at,
+        ended_at=session.ended_at,
+        tutor=SessionTutorRead(
+            id=tutor.user_id,
+            full_name=tutor.full_name,
+            profile_picture_url=tutor.profile_picture_url,
+        ),
+        scheduled_at=ScheduledAt(**session.scheduled_at),
+        created_at=session.created_at,
+    )
+
+
+async def accept_session(
+    session_id: uuid.UUID,
+    tutor_id: uuid.UUID,
+    data: AcceptSession,
+    db: SessionDep,
+) -> Session:
+    session = await db.get(Session, session_id)
+
+    if not session:
+        raise HTTPException(404, "Session not found")
+    if session.tutor_id != tutor_id:
+        raise HTTPException(403, "Not your session")
+    if session.status != SessionStatus.pending:
+        raise HTTPException(400, f"Cannot accept a session with status '{session.status}'")
+
+    session.status = SessionStatus.accepted
+    session.meet_link = data.meet_link
+
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
+async def decline_session(
+    session_id: uuid.UUID,
+    tutor_id: uuid.UUID,
+    db: SessionDep,
+) -> Session:
+    session = await db.get(Session, session_id)
+
+    if not session:
+        raise HTTPException(404, "Session not found")
+    if session.tutor_id != tutor_id:
+        raise HTTPException(403, "Not your session")
+    if session.status not in (SessionStatus.pending, SessionStatus.accepted):
+        raise HTTPException(400, f"Cannot decline a session with status '{session.status}'")
+
+    session.status = SessionStatus.declined
+
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
+async def cancel_session(
+    session_id: uuid.UUID,
+    student_id: uuid.UUID,
+    db: SessionDep,
+) -> Session:
+    session = await db.get(Session, session_id)
+
+    if not session:
+        raise HTTPException(404, "Session not found")
+    if session.student_id != student_id:
+        raise HTTPException(403, "Not your session")
+    if session.status not in (SessionStatus.pending, SessionStatus.accepted):
+        raise HTTPException(400, f"Cannot cancel a session with status '{session.status}'")
+
+    session.status = SessionStatus.cancelled
+
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
+async def start_session(
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: SessionDep,
+) -> Session:
+    session = await db.get(Session, session_id)
+
+    if not session:
+        raise HTTPException(404, "Session not found")
+    if user_id not in (session.student_id, session.tutor_id):
+        raise HTTPException(403, "Not part of this session")
+    if session.status != SessionStatus.accepted:
+        raise HTTPException(400, f"Cannot start a session with status '{session.status}'")
+
+    session.status = SessionStatus.in_progress
+    session.started_at = datetime.now(timezone.utc)
+
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
+async def end_session(
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: SessionDep,
+) -> Session:
+    session = await db.get(Session, session_id)
+
+    if not session:
+        raise HTTPException(404, "Session not found")
+    if user_id not in (session.student_id, session.tutor_id):
+        raise HTTPException(403, "Not part of this session")
+    if session.status != SessionStatus.in_progress:
+        raise HTTPException(400, f"Cannot end a session with status '{session.status}'")
+
+    now = datetime.now(timezone.utc)
+    session.status = SessionStatus.completed
+    session.ended_at = now
+
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
+async def submit_review(
+    session_id: uuid.UUID,
+    student_id: uuid.UUID,
+    data: ReviewCreate,
+    db: SessionDep,
+) -> Review:
+    session = await db.get(Session, session_id)
+
+    if not session:
+        raise HTTPException(404, "Session not found")
+    if session.student_id != student_id:
+        raise HTTPException(403, "Not your session")
+    if session.status != SessionStatus.completed:
+        raise HTTPException(400, "Can only review completed sessions")
+
+    existing = await db.exec(
+        select(Review).where(Review.session_id == session_id)
+    )
+    if existing.first():
+        raise HTTPException(400, "Session already reviewed")
+
+    review = Review(
+        session_id=session_id,
+        student_id=student_id,
+        tutor_id=session.tutor_id,
+        rating=data.rating,
+        comment=data.comment,
+    )
+
+    db.add(review)
+    await db.commit()
+    await db.refresh(review)
+    return review
+
+
+async def get_review(
+    session_id: uuid.UUID,
+    db: SessionDep,
+) -> Review:
+    result = await db.exec(
+        select(Review).where(Review.session_id == session_id)
+    )
+    review = result.first()
+
+    if not review:
+        raise HTTPException(404, "No review for this session")
+
+    return review

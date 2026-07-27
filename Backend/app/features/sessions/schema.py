@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
 from app.common.enums import SessionStatus
+from sqlmodel import Field
 
 
 class ScheduledAt(BaseModel):
@@ -24,7 +25,6 @@ class SessionTutorRead(BaseModel):
     full_name: str
     profile_picture_url: str | None
 
-
 class SessionRead(BaseModel):
     id: uuid.UUID
     subject: str
@@ -32,6 +32,9 @@ class SessionRead(BaseModel):
     notes: str | None
     status: SessionStatus
     cost: float
+    meet_link: str | None
+    started_at: datetime | None
+    ended_at: datetime | None
     tutor: SessionTutorRead
     scheduled_at: ScheduledAt
     created_at: datetime
@@ -50,3 +53,21 @@ class PostSessionResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+class SessionParams(BaseModel):
+    status: Optional[SessionStatus] = None
+
+class AcceptSession(BaseModel):
+    meet_link: str
+
+class ReviewCreate(BaseModel):
+    rating: int = Field(ge=1, le=10)
+    comment: str | None = None
+
+class ReviewRead(BaseModel):
+    id: uuid.UUID
+    session_id: uuid.UUID
+    rating: int
+    comment: str | None
+    created_at: datetime
+

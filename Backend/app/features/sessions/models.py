@@ -28,7 +28,7 @@ class Session(SQLModel, table=True):
 
     subject: str = Field(sa_column=Column(Text, nullable=False))
 
-    duration: float = Field(nullable=False)  # matches your frontend
+    duration: float = Field(nullable=False)
 
     scheduled_at: Dict[str, Any] = Field(
         sa_column=Column(JSONB, nullable=False)
@@ -43,6 +43,18 @@ class Session(SQLModel, table=True):
 
     cost: float = Field(nullable=False)
 
+    meet_link: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+
+    started_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+
+    ended_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -51,4 +63,4 @@ class Session(SQLModel, table=True):
     updated_at: datetime = Field(
         default_factory=datetime.utcnow,
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    ) 
+    )
