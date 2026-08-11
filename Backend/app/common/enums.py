@@ -34,3 +34,8 @@ class AiChatRole(str,Enum):
     user = "user"
     assistant = "assistant"
 
+class DocumentStatus(str, Enum):
+    processing = "processing"
+    ready = "ready"
+    failed = "failed"
+

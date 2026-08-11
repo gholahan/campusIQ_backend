@@ -5,7 +5,7 @@ from app.common.enums import AiChatRole
 
 
 class  AIMessageRequest (BaseModel):
-    message: str = Field(..., min_length=1, max_length=200)
+    message: str = Field(..., min_length=1, max_length=300)
 
 
 class AIMessageResponse(BaseModel):

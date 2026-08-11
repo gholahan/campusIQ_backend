@@ -1,6 +1,6 @@
 ﻿from fastapi import APIRouter, Depends, Query
-from app.features.ai.service import create_ai_message, get_user_ai_messages
-from app.features.ai.schemas import AIMessageRequest, AIMessageResponse, PaginatedAIMessages
+from app.features.ai.chat.service import create_ai_message, get_user_ai_messages
+from app.features.ai.chat.schemas import AIMessageRequest, AIMessageResponse, PaginatedAIMessages
 from app.features.auth.dependencies import require_student
 from app.features.users.models import User
 from app.db.session import SessionDep

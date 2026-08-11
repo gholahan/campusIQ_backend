@@ -27,7 +27,10 @@ from app.features.reviews.models import Review
 from app.features.tutors.models import TutorProfile, Course, TutorCourse
 
 # AI
-from app.features.ai.models import AIConversation, AIMessage, AICredit
+from app.features.ai.chat.models import AIConversation, AIMessage, AICredit
+
+#Document
+from app.features.documents.models import Document, DocumentChunk
 
 # AUDIT
 from app.features.audit.models import AuditLog

@@ -11,7 +11,7 @@ from app.features.student.schema import (
     TutorsStats,
     AIStats,
 )
-from app.features.ai.models import AIMessage, AIConversation
+from app.features.ai.chat.models import AIMessage, AIConversation
 from app.common.enums import AiChatRole
 
 from app.features.sessions.service import (

@@ -4,17 +4,17 @@ from datetime import datetime, timezone
 
 from langchain_core.messages import HumanMessage as LangHumanMessage
 from sqlmodel import select
-from sqlmodel.ext.asyncio.session import AsyncSession
+from app.db.session import SessionDep
 
 from app.common.enums import AiChatRole
 from app.features.ai import graph as ai_graph
-from app.features.ai.models import AICredit, AIConversation, AIMessage
-from app.features.ai.schemas import AIMessageRead, PaginatedAIMessages
+from app.features.ai.chat.models import AICredit, AIConversation, AIMessage
+from app.features.ai.chat.schemas import AIMessageRead, PaginatedAIMessages
 
 logger = logging.getLogger(__name__)
 
 
-async def _get_or_create_conversation(session: AsyncSession, user_id: uuid.UUID) -> AIConversation:
+async def _get_or_create_conversation(session: SessionDep, user_id: uuid.UUID) -> AIConversation:
     result = await session.exec(select(AIConversation).where(AIConversation.user_id == user_id))
     conversation = result.first()
     if not conversation:
@@ -24,7 +24,13 @@ async def _get_or_create_conversation(session: AsyncSession, user_id: uuid.UUID)
     return conversation
 
 
-async def _check_and_update_credit(session: AsyncSession, user_id: uuid.UUID) -> None:
+async def get_user_conversation_id_service(session: SessionDep, user_id: uuid.UUID) -> uuid.UUID:
+    """Return the AI conversation id for a user, creating the conversation if needed."""
+    conversation = await _get_or_create_conversation(session, user_id)
+    return conversation.id
+
+
+async def _check_and_update_credit(session: SessionDep, user_id: uuid.UUID) -> None:
     result = await session.exec(select(AICredit).where(AICredit.user_id == user_id))
     credit = result.first()
     now = datetime.now(timezone.utc)
@@ -43,7 +49,7 @@ async def _check_and_update_credit(session: AsyncSession, user_id: uuid.UUID) ->
 
 
 
-async def create_ai_message(session: AsyncSession, user_id: uuid.UUID, topic: str) -> str:
+async def create_ai_message(session: SessionDep, user_id: uuid.UUID, topic: str) -> str:
     logger.info("Reached create_ai_message")
     if ai_graph.graph is None:
         raise RuntimeError("Graph not initialized. Call setup_graph() on startup.")
@@ -56,8 +62,6 @@ async def create_ai_message(session: AsyncSession, user_id: uuid.UUID, topic: st
             config={"configurable": {"thread_id": str(conversation.id)}},
         )
         logger.debug("Raw graph result: %s", result)
-        for i, message in enumerate(result["messages"]):
-            logger.info("[%d] %s: %s", i, message.type, message.content)
         ai_text = str(result["messages"][-1].content)
     except Exception as e:
         logger.error("LLM invocation failed for user %s: %s", user_id, e)
@@ -71,7 +75,7 @@ async def create_ai_message(session: AsyncSession, user_id: uuid.UUID, topic: st
 
 
 async def get_user_ai_messages(
-    session: AsyncSession,
+    session: SessionDep,
     user_id: uuid.UUID,
     limit: int = 20,
     cursor: uuid.UUID | None = None,

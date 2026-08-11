@@ -8,8 +8,9 @@ from app.features.admin.routes import router as admin_router
 from app.features.tutors.routes import router as tutors_router
 from app.features.sessions.routes import router as session_router
 from app.features.student.routes import router as student_router
-from app.features.ai.routes import router as ai_router
+from app.features.ai.chat.routes import router as ai_chat_router
 from app.features.ai.graph import setup_graph
+from app.features.documents.routes import router as document_router
 
 configure_logging()
 
@@ -38,7 +39,8 @@ app.include_router(admin_router)
 app.include_router(tutors_router)
 app.include_router(session_router)
 app.include_router(student_router)
-app.include_router(ai_router)
+app.include_router(ai_chat_router)
+app.include_router(document_router)
 
 
 @app.get("/health")

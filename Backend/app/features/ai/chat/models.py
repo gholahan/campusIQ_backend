@@ -1,8 +1,12 @@
 from datetime import datetime, timezone
+from typing import Any
 import uuid
-from sqlalchemy import Column, Enum, ForeignKey, Index, DateTime, Text
+
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Index, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlmodel import Field, SQLModel
+
 from app.common.enums import AiChatRole
 
 
@@ -41,6 +45,16 @@ class AIMessage(SQLModel, table=True):
         )
     )
     content:str = Field(sa_column=Column(Text, nullable=False))
+    document_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=Column(ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
+    )
+
+    citations: list[dict[str, Any]] | None = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True)
+        # shape: [{ document_id, file_name, page_number, chunk_index }]
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=Column(
@@ -49,7 +63,6 @@ class AIMessage(SQLModel, table=True):
             server_default=func.now(),
         ),
     )
-
 
     __table_args__ = (
         Index("idx_ai_messages_convo", "conversation_id", "created_at"),
