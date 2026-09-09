@@ -2,14 +2,15 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+from fastapi import HTTPException, status
 from langchain_core.messages import HumanMessage as LangHumanMessage
 from sqlmodel import select
 from app.db.session import SessionDep
 
 from app.common.enums import AiChatRole
-from app.features.ai import graph as ai_graph
 from app.features.ai.chat.models import AICredit, AIConversation, AIMessage
-from app.features.ai.chat.schemas import AIMessageRead, PaginatedAIMessages
+from app.features.ai.chat.schemas import AIMessageRead, AIMessageResponse, PaginatedAIMessages
+from app.features.documents.models import Document
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,24 @@ async def _check_and_update_credit(session: SessionDep, user_id: uuid.UUID) -> N
 
 
 
-async def create_ai_message(session: SessionDep, user_id: uuid.UUID, topic: str) -> str:
+async def create_ai_message(
+    session: SessionDep,
+    user_id: uuid.UUID,
+    topic: str,
+    document_id: uuid.UUID | None = None,
+) -> AIMessageResponse:
+    if document_id is not None:
+        document_result = await session.exec(
+            select(Document).where(Document.id == document_id)
+        )
+        if document_result.first() is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found",
+            )
+
+    from app.features.ai import graph as ai_graph
+
     logger.info("Reached create_ai_message")
     if ai_graph.graph is None:
         raise RuntimeError("Graph not initialized. Call setup_graph() on startup.")
@@ -58,7 +76,11 @@ async def create_ai_message(session: SessionDep, user_id: uuid.UUID, topic: str)
     try:
         logger.info("Conversation ID: %s", conversation.id)
         result = await ai_graph.graph.ainvoke(
-            {"messages": [LangHumanMessage(content=topic)]},
+            {
+                "messages": [LangHumanMessage(content=topic)],
+                "conversation_id": str(conversation.id),
+                "document_id": str(document_id) if document_id else None,
+            },
             config={"configurable": {"thread_id": str(conversation.id)}},
         )
         logger.debug("Raw graph result: %s", result)
@@ -67,11 +89,25 @@ async def create_ai_message(session: SessionDep, user_id: uuid.UUID, topic: str)
         logger.error("LLM invocation failed for user %s: %s", user_id, e)
         raise
     await _check_and_update_credit(session, user_id)
-    session.add(AIMessage(conversation_id=conversation.id, role=AiChatRole.user, content=topic))
-    session.add(AIMessage(conversation_id=conversation.id, role=AiChatRole.assistant, content=ai_text))
+    session.add(
+        AIMessage(
+            conversation_id=conversation.id,
+            role=AiChatRole.user,
+            content=topic,
+            document_id=document_id,
+        )
+    )
+    session.add(
+        AIMessage(
+            conversation_id=conversation.id,
+            role=AiChatRole.assistant,
+            content=ai_text,
+            document_id=document_id,
+        )
+    )
     await session.commit()
 
-    return ai_text
+    return AIMessageResponse(message=topic, response=ai_text, document_id=document_id)
 
 
 async def get_user_ai_messages(

@@ -6,10 +6,13 @@ from app.common.enums import AiChatRole
 
 class  AIMessageRequest (BaseModel):
     message: str = Field(..., min_length=1, max_length=300)
+    document_id: uuid.UUID | None = None
 
 
 class AIMessageResponse(BaseModel):
+    message: str
     response: str
+    document_id: uuid.UUID | None = None
 
 
 class ConversationRead(BaseModel):
@@ -24,6 +27,7 @@ class AIMessageRead(BaseModel):
     conversation_id: uuid.UUID
     role: AiChatRole
     content: str
+    document_id: uuid.UUID | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

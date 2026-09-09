@@ -15,8 +15,13 @@ async def send_ai_message(
     session: SessionDep,
     current_user: User = Depends(require_student),
 ) -> AIMessageResponse:
-    response = await create_ai_message(session, current_user.id, body.message)
-    return AIMessageResponse(response=response)
+    result = await create_ai_message(
+        session,
+        current_user.id,
+        body.message,
+        document_id=body.document_id,
+    )
+    return result
 
 
 @router.get("/conversations", response_model=PaginatedAIMessages)
