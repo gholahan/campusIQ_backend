@@ -41,6 +41,21 @@ async def create_document(
     return document
 
 
+async def get_document_by_file_name(
+    db: AsyncSession,
+    conversation_id: uuid.UUID,
+    file_name: str,
+) -> Document | None:
+
+    statement = select(Document).where(
+        Document.conversation_id == conversation_id,
+        Document.file_name.ilike(f"%{file_name}%"),
+    ).order_by(Document.created_at.desc()).limit(1)
+
+    result = await db.exec(statement)
+    return result.one_or_none()
+
+
 async def get_document_by_id(
     db: SessionDep,
     document_id: uuid.UUID,
