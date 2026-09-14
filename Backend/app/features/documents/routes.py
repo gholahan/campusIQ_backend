@@ -1,5 +1,6 @@
 import uuid
-from fastapi import APIRouter, Depends, status
+# import asyncio
+from fastapi import APIRouter, Depends, status, BackgroundTasks
 
 from app.db.session import SessionDep
 from app.features.auth.dependencies import require_student
@@ -14,7 +15,7 @@ from app.features.documents.service import (
     get_user_documents,
     delete_document,
 )
-from app.features.ai.rag.task import upload_document
+from app.features.ai.rag.task import upload_document as upload_document_task
 
 
 router = APIRouter(
@@ -50,6 +51,7 @@ async def get_user_documents_route(
 async def upload_document_route(
     body: UploadDocumentRequest,
     session: SessionDep,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_student),
 ) -> DocumentResponse:
 
@@ -59,7 +61,8 @@ async def upload_document_route(
         body=body,
     )
 
-    upload_document.delay(
+    background_tasks.add_task(
+        upload_document_task,
         document_id=str(document.id),
         file_url=document.file_url,
     )
