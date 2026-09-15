@@ -7,12 +7,14 @@ from app.features.auth.dependencies import require_student
 from app.features.users.models import User
 from app.features.documents.schemas import (
     DocumentResponse,
+    DocumentStatusResponse,
     UploadDocumentRequest,
 )
 from app.features.documents.service import (
     create_document,
     get_document_by_id,
     get_user_documents,
+    get_user_document,
     delete_document,
 )
 from app.features.ai.rag.task import upload_document as upload_document_task
@@ -68,6 +70,25 @@ async def upload_document_route(
     )
 
     return DocumentResponse.model_validate(document)
+
+
+@router.get(
+    "/{document_id}/status",
+    response_model=DocumentStatusResponse,
+)
+async def get_document_status_route(
+    document_id: uuid.UUID,
+    session: SessionDep,
+    current_user: User = Depends(require_student),
+) -> DocumentStatusResponse:
+
+    document = await get_user_document(
+        db=session,
+        document_id=document_id,
+        user_id=current_user.id,
+    )
+
+    return DocumentStatusResponse(status=document.status)
 
 
 @router.get(

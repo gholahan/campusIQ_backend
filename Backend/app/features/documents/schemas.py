@@ -20,6 +20,10 @@ class DocumentResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+class DocumentStatusResponse(BaseModel):
+    status: DocumentStatus
+
 class DocumentChunkResponse(BaseModel):
     id: uuid.UUID
     document_id: uuid.UUID
